@@ -99,8 +99,9 @@ def now_tz(tz: str) -> dt.datetime:
 
     Using timezone-aware datetimes avoids DST pitfalls and makes logging consistent.
     """
-    # TODO: Use dt.datetime.now with ZoneInfo to return timezone-aware datetime
-    pass
+    # Use dt.datetime.now with ZoneInfo to return timezone-aware datetime
+    timezone = ZoneInfo(tz)
+    return dt.datetime.now(timezone)
 
 
 def is_market_hours(cfg_mh: dict) -> bool:
@@ -118,11 +119,20 @@ def is_market_hours(cfg_mh: dict) -> bool:
     Returns:
         True if within the configured hours, else False.
     """
-    # TODO: If checking is disabled, return True
-    # TODO: Obtain current time via now_tz(cfg_mh["tz"])
-    # TODO: Optionally limit to Monday–Friday
-    # TODO: Compare current hour with start_hour/end_hour
-    pass
+    # If checking is disabled, return True
+    if not cfg_mh["enabled"]:
+        return True
+    # Obtain current time via now_tz(cfg_mh["tz"])
+    time_now = now_tz(cfg_mh["tz"])
+
+    # Limit to Monday–Friday
+    if time_now.weekday() >= 5:
+        return False
+    
+    # Compare current hour with start_hour/end_hour
+    if not (cfg_mh["start_hour"] <= time_now.hour < cfg_mh["end_hour"]):
+        return False
+    return True
 
 
 def run_once(
@@ -149,9 +159,20 @@ def run_once(
       - Reads/writes the alert state JSON (anti-spam)
       - Writes logs according to logging setup
     """
-    # TODO: Log job start and determine market-hours eligibility
-    # TODO: Load alert state from state_file
-    # TODO: Iterate over tickers and fetch open/last prices
+    # Log job start and determine market-hours eligibility
+    logging.info("Starting monitoring cycle")
+    if not is_market_hours(market_hours_cfg):
+        if test_cfg.get("bypass_market_hours", False):
+            logging.warning("Outside market hours, but bypass enabled via test config")
+        else:
+            logging.info("Outside market hours, skipping monitoring cycle")
+            return
+    # Load alert state from state_file
+    state = load_state(state_file)
+    
+    # Iterate over tickers and fetch open/last prices
+    for ticker in tickers:
+        price_open, price_last = get_open_and_last(ticker)
     # TODO: Compute Δ% and apply test overrides if needed
     # TODO: Decide whether to send alerts and prepare notification body
     # TODO: Optionally fetch and format news headlines

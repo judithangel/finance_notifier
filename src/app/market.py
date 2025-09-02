@@ -18,27 +18,27 @@ def get_open_and_last(ticker: str) -> Tuple[float, float]:
       2. If no intraday data is available (e.g., market closed),
          fall back to daily interval ("1d").
     """
-    # TODO: Loop over intraday intervals ("1m", "5m", "15m")
-    # for interval in ("1m", "5m", "15m"):
+    # Loop over intraday intervals ("1m", "5m", "15m")
+    for interval in ("1m", "5m", "15m"):
 
-        # TODO: For each interval, attempt up to two retries
-        # for attempt in range(2):
-        #     df = yf.Ticker(ticker).history(
-        #         period="1d", interval=interval, auto_adjust=False
-        #     )
-        #     if not df.empty:
-        #         open_today = float(df.iloc[0]["Open"])
-        #         last_price = float(df.iloc[-1]["Close"])
-        #         logger.debug(
-        #             "Intraday %s: interval=%s open=%.4f last=%.4f",
-        #             ticker, interval, open_today, last_price,
-        #         )
-        #         return open_today, last_price
-        #     logger.debug(
-        #         "Empty intraday data (%s, %s), retry %d",
-        #         ticker, interval, attempt + 1,
-        #     )
-        #     time.sleep(0.4)
+        # For each interval, attempt up to two retries
+        for attempt in range(2):
+            df = yf.Ticker(ticker).history(
+                period="1d", interval=interval, auto_adjust=False
+            )
+            if not df.empty:
+                open_today = float(df.iloc[0]["Open"])
+                last_price = float(df.iloc[-1]["Close"])
+                logger.debug(
+                    "Intraday %s: interval=%s open=%.4f last=%.4f",
+                    ticker, interval, open_today, last_price,
+                )
+                return open_today, last_price
+            logger.debug(
+                "Empty intraday data (%s, %s), retry %d",
+                ticker, interval, attempt + 1,
+            )
+            time.sleep(0.4)
 
     # TODO: Fallback to daily data ("1d" interval) and raise RuntimeError if empty
     # df = yf.Ticker(ticker).history(period="1d", interval="1d", auto_adjust=False)

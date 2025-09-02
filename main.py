@@ -25,24 +25,24 @@ def main():
         cfg["log"]["level"],
     )
 
-    # TODO: Run one monitoring cycle via run_once using settings from cfg
-    # run_once(
-    #     tickers=cfg["tickers"],
-    #     threshold_pct=float(cfg["threshold_pct"]),
-    #     ntfy_server=cfg["ntfy"]["server"],
-    #     ntfy_topic=cfg["ntfy"]["topic"],
-    #     state_file=Path(cfg["state_file"]),
-    #     market_hours_cfg=cfg["market_hours"],
-    #     test_cfg=cfg["test"],
-    #     news_cfg=cfg["news"],
-    # )
-
-    notify_ntfy(
-        server=cfg["ntfy"]["server"],
-        topic=cfg["ntfy"]["topic"],
-        title="Test Notification",
-        message="This is a test message."
+    # Run one monitoring cycle via run_once using settings from cfg
+    run_once(
+        tickers=cfg["tickers"],
+        threshold_pct=float(cfg["threshold_pct"]),
+        ntfy_server=cfg["ntfy"]["server"],
+        ntfy_topic=cfg["ntfy"]["topic"],
+        state_file=Path(cfg["state_file"]),
+        market_hours_cfg=cfg["market_hours"],
+        test_cfg=cfg["test"],
+        news_cfg=cfg["news"],
     )
+
+    # notify_ntfy(
+    #     server=cfg["ntfy"]["server"],
+    #     topic=cfg["ntfy"]["topic"],
+    #     title="Test Notification",
+    #     message="This is a test message."
+    # )
 
 
 if __name__ == "__main__":

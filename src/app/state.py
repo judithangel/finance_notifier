@@ -14,16 +14,24 @@ def load_state(path: Path) -> Dict[str, str]:
     has already triggered an alert for. This prevents sending duplicate
     notifications every run.
     """
-    # TODO: Prüfen, ob die Datei existiert und deren Inhalt als JSON laden
-    # TODO: Bei Erfolg den geladenen Zustand zurückgeben und einen Debug-Log schreiben
-    # TODO: Bei Fehlern eine Warnung loggen und ein leeres Dict zurückgeben
-    pass
+    # Prüfen, ob die Datei existiert und deren Inhalt als JSON laden
+    if not path.exists():
+        logger.warning("State file does not exist, returning empty state")
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            state = json.load(f)
+            logger.debug("Loaded state: %s", state)
+            return state
+    except Exception as e:
+        logger.warning("Failed to load state: %s", e)
+        return {}
 
 
 def save_state(path: Path, state: Dict[str, str]) -> None:
     """
     Save the current alert state to disk.
     """
-    # TODO: Den Zustand als JSON (UTF-8) in die Datei schreiben
-    # TODO: Einen Debug-Log mit dem gespeicherten Zustand ausgeben
-    pass
+    # Den Zustand als JSON (UTF-8) in die Datei schreiben
+    path.write_text(json.dumps(state), encoding="utf-8")
+    logger.debug("Saved state: %s", state)
