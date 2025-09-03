@@ -48,33 +48,30 @@ def notify_ntfy(
                 click_url="https://finance.yahoo.com/quote/AAPL"
             )
     """
-    # TODO: If dry_run is True, log the message and return without sending
-    # if dry_run:
-    #     logger.info(...)
-    #     return
+    # If dry_run is True, log the message and return without sending
+    if dry_run:
+        logger.info(f"Dry run: {title} - {message}")
+        return
 
-    # TODO: Construct the topic URL and prepare request headers
+    # Construct the topic URL and prepare request headers
     url = f"{server.rstrip('/')}/{topic}"
     print(url)
     headers = {
         "Title": title,
         "Priority": "high",
     }
-    r = requests.post(url, data=message.encode("utf-8"), headers=headers, timeout=20)
+    
+    # If markdown is enabled, set the appropriate header
+    if markdown:
+        headers["Markdown"] = "yes"
 
-    # TODO: If markdown is enabled, set the appropriate header
-    # if markdown:
-    #     headers["Markdown"] = "yes"
+    # If a click_url is provided, add it to headers
+    if click_url:
+        headers["Click"] = click_url
 
-    # TODO: If a click_url is provided, add it to headers
-    # if click_url:
-    #     headers["Click"] = click_url
-
-    # TODO: Perform the POST request inside a try/except block and handle errors
-    # try:
-    #     r = requests.post(url, data=message.encode("utf-8"), headers=headers, timeout=20)
-    #     r.raise_for_status()
-    # except requests.RequestException as e:
-    #     logger.warning(...)
-
-    pass  # Remove once implemented
+    # Perform the POST request inside a try/except block and handle errors
+    try:
+        r = requests.post(url, data=message.encode("utf-8"), headers=headers, timeout=20)
+        r.raise_for_status()
+    except requests.RequestException as e:
+        logger.warning(f"Failed to send notification: {e}")

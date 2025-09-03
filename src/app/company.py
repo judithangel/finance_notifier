@@ -5,17 +5,19 @@ from typing import Optional, Dict, Any, Tuple
 import json
 import time
 import yfinance as yf
+import logging
 
-# TODO Create with 'Path' class the 'CACHE_FILE' object which stores location to 'company_cache.json'
-# CACHE_FILE =
+# Create with 'Path' class the 'CACHE_FILE' object which stores location to 'company_cache.json'
+CACHE_FILE = Path("company_cache.json")
 
-# TODO # Common legal suffixes often found in company names (ADD MORE),
+# Common legal suffixes often found in company names,
 # which we remove to get a cleaner keyword (e.g., "Apple Inc." -> "Apple"). 
 LEGAL_SUFFIXES = {
-    "inc", "inc.",
+    "inc", "GmbH", "AG", "Ltd", "LLC", "Corp", "Co", "PLC", "SE"
 }
 
-# TODO Add class attributes like in the class description
+logger = logging.getLogger("stock-alerts")
+
 
 @dataclass
 class CompanyMeta:
@@ -29,30 +31,30 @@ class CompanyMeta:
         source (str): Source of the name (e.g., "info.longName", "info.shortName", "fallback").
         base_ticker (str): Simplified ticker without suffixes, e.g., "SAP" for "SAP.DE".
     """
-    pass
+    ticker: str
+    name: Optional[str]
+    raw_name: Optional[str]
+    source: str
+    base_ticker: str
 
-# TODO Finish this function:
 
 def _load_cache() -> Dict[str, Any]:
     """Load cached company metadata from JSON file."""
     if CACHE_FILE.exists():
         try:
-            # Return content of file
-            pass
-        except Exception:
-            # Return empty dictionary
-            pass
+            metadata = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+            return metadata
+        except Exception as e:
+            logger.error(f"Error loading cache: {e}")
+            return {}
     else:
         # Return empty dictionary
-        pass
+        return {}
 
 def _save_cache(cache: Dict[str, Any]) -> None:
     """Save company metadata to local cache file."""
-    # TODO What parameters are missing?
-    # CACHE_FILE.write_text(json.dumps(), encoding="utf-8")
+    CACHE_FILE.write_text(json.dumps(cache), encoding="utf-8")
 
-
-# TODO Finish the function logic    
 def _strip_legal_suffixes(name: str) -> str:
     """
     Remove common legal suffixes from a company name.
@@ -61,13 +63,13 @@ def _strip_legal_suffixes(name: str) -> str:
         "Apple Inc." -> "Apple"
         "SAP SE" -> "SAP"
     """
+    if not name:
+        return None
     parts = [p.strip(",. ") for p in name.split()]
     while parts and parts[-1].lower() in LEGAL_SUFFIXES:
-        # There is something missing
-        pass
+        parts = parts[:-1]
     return " ".join(parts) if parts else name.strip()
 
-# TODO Finish the function logic
 def _base_ticker(symbol: str) -> str:
     """
     Extract the base ticker symbol.
@@ -80,10 +82,9 @@ def _base_ticker(symbol: str) -> str:
     if symbol.startswith("^"):  # Index tickers like ^GDAXI
         pass
     if "." in symbol:
-        pass
+        symbol = symbol.split(".")[0]
     return symbol
 
-# TODO Finish the try and except block
 def _fetch_yf_info(symbol: str, retries: int = 2, delay: float = 0.4) -> Dict[str, Any]:
     """
     Fetch company information from Yahoo Finance.
@@ -99,12 +100,13 @@ def _fetch_yf_info(symbol: str, retries: int = 2, delay: float = 0.4) -> Dict[st
     last_exc = None
     for _ in range(retries + 1):
         try:
-            # Missing code
+            info = yf.Ticker(symbol).info
             if info:
                 return info
         except Exception as e:
-            # Missing code
+            last_exc = e
             time.sleep(delay)
+    logger.error(f"Failed to fetch Yahoo Finance info for {symbol}: {last_exc}")
     return {}
 
 
@@ -112,46 +114,53 @@ def get_company_meta(symbol: str) -> CompanyMeta:
     """
     Retrieve company metadata (name, base ticker, etc.) with caching and fallbacks.
     """
-    # TODO: Load the cache with _load_cache() and return early if the symbol exists
-    # cache = _load_cache()
-    # if symbol in cache:
-    #     ...
+    # Load the cache with _load_cache() and return early if the symbol exists
+    cache = _load_cache()
 
-    # TODO: Fetch raw company information via _fetch_yf_info
-    # info = _fetch_yf_info(symbol)
+    # Fetch raw company information via _fetch_yf_info
+    info = _fetch_yf_info(symbol)
 
-    # TODO: Extract a potential company name from info ("longName", "shortName", "displayName")
-    # raw_name = ...
-    # source = ...
+    # Extract a potential company name from info ("longName", "shortName", "displayName")
+    sources = ["longName", "shortName", "displayName"]
+    for s in sources:
+        if info.get(s):
+            raw_name = info.get(s)
+            source = s
+            break
+    else:
+        raw_name = None
+        source = "fallback"
 
-    # TODO: Clean the extracted name with _strip_legal_suffixes and handle fallback to _base_ticker
-    # clean = ...
-    # if not clean:
-    #     ...
+    # Clean the extracted name with _strip_legal_suffixes and handle fallback to _base_ticker
+    clean = _strip_legal_suffixes(raw_name)
+    if not clean:
+        clean = _base_ticker(symbol)
 
-    # TODO: Create a CompanyMeta instance and cache the result using _save_cache
-    # meta = CompanyMeta(...)
+    # Create a CompanyMeta instance and cache the result using _save_cache
+    meta = CompanyMeta(ticker=symbol, name=clean, raw_name=raw_name, source=source,
+                       base_ticker=_base_ticker(symbol))
+    meta_dict = meta.__dict__
 
-    # TODO: Save the constructed metadata back into the cache
-    # _save_cache(cache)
+    # Save the constructed metadata back into the cache
+    _save_cache(meta_dict)
 
-    pass  # Remove this once the function is implemented
-
+    return meta
 
 def auto_keywords(symbol: str) -> Tuple[str, list[str]]:
     """
     Generate a company search keyword set based on symbol.
     """
-    # TODO: Fetch the CompanyMeta for the symbol
-    # meta = get_company_meta(symbol)
+    # Fetch the CompanyMeta for the symbol
+    meta = get_company_meta(symbol)
 
-    # TODO: Determine the display name and construct the keyword list
-    # name = ...
-    # base = ...
-    # primary = ...
-    # req = ...
+    # Determine the display name and construct the keyword list
+    try:
+        name = meta.name
+    except AttributeError:
+        name = meta.ticker
+    base = meta.base_ticker
+    primary = meta.raw_name
+    req = [name, base, primary, primary.strip(".")]
 
-    # TODO: Return the cleaned name and the list of required keywords
-    # return name, req
-
-    pass  # Remove this once the function is implemented
+    # Return the cleaned name and the list of required keywords
+    return name, req

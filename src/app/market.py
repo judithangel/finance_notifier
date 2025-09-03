@@ -40,18 +40,16 @@ def get_open_and_last(ticker: str) -> Tuple[float, float]:
             )
             time.sleep(0.4)
 
-    # TODO: Fallback to daily data ("1d" interval) and raise RuntimeError if empty
-    # df = yf.Ticker(ticker).history(period="1d", interval="1d", auto_adjust=False)
-    # if df.empty:
-    #     raise RuntimeError(f"No data available for {ticker}")
+    # Fallback to daily data ("1d" interval) and raise RuntimeError if empty
+    df = yf.Ticker(ticker).history(period="1d", interval="1d", auto_adjust=False)
+    if df.empty:
+        raise RuntimeError(f"No data available for {ticker}")
 
-    # TODO: Extract open and close from the last row, log them, and return
-    # row = df.iloc[-1]
-    # open_today, last_price = float(row["Open"]), float(row["Close"])
-    # logger.debug(
-    #     "Fallback daily data %s: open=%.4f last=%.4f",
-    #     ticker, open_today, last_price,
-    # )
-    # return open_today, last_price
-
-    pass  # Remove once implemented
+    # Extract open and close from the last row, log them, and return
+    row = df.iloc[-1]
+    open_today, last_price = float(row["Open"]), float(row["Close"])
+    logger.debug(
+        "Fallback daily data %s: open=%.4f last=%.4f",
+        ticker, open_today, last_price,
+    )
+    return open_today, last_price

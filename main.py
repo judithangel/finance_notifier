@@ -36,14 +36,9 @@ def main():
         test_cfg=cfg["test"],
         news_cfg=cfg["news"],
     )
-
-    # notify_ntfy(
-    #     server=cfg["ntfy"]["server"],
-    #     topic=cfg["ntfy"]["topic"],
-    #     title="Test Notification",
-    #     message="This is a test message."
-    # )
-
+    # from src.app.company import auto_keywords
+    # name, req = auto_keywords(cfg["tickers"][0])
+    # print(req)
 
 if __name__ == "__main__":
     main()
