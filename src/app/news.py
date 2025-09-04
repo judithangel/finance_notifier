@@ -10,8 +10,7 @@ def build_query(name: str, ticker: str) -> str:
     Build a Google News search query for a company.
     """
     # Return a query combining company name, ticker, and finance keywords
-    query = f"{name} {ticker} finance"
-    return query
+    return f'("{name}" OR {ticker}) (stock OR aktie OR börse)'
 
 
 def filter_titles(items: List[Dict[str, str]], required_keywords: Iterable[str] = ()) -> List[Dict[str, str]]:
@@ -37,7 +36,7 @@ def _google_news_rss_url(query: str, lang: str = "de", country: str = "DE") -> s
     # Encode the query with quote_plus, append "when:12h"
     query_enc = quote_plus(f"{query} when:12h")
     # Construct and return the final RSS URL
-    return f"https://news.google.com/rss/search?q={query_enc}&hl={lang}-{country}&gl={country}&ceid={country}:{lang}"
+    return f"https://news.google.com/rss/search?q={query_enc}&hl={lang}&gl={country}&ceid={country}:{lang}"
 
 def fetch_headlines(
     query: str,
@@ -48,18 +47,50 @@ def fetch_headlines(
 ) -> List[Dict[str, str]]:
     """
     Fetch latest headlines from Google News RSS for a given query.
+
+    Args:
+        query (str): Search query (usually built with `build_query`).
+        limit (int): Maximum number of news items to return.
+        lookback_hours (int): Only include news not older than this.
+        lang (str): Language code (e.g. "de", "en").
+        country (str): Country code (e.g. "DE", "US").
+
+    Returns:
+        List[Dict[str, str]]: News items in the format:
+            {
+              "title": "Some headline",
+              "source": "Publisher",
+              "link": "https://original-article.com",
+              "published": "2025-08-30T10:45:00+00:00"
+            }
+
+    Notes:
+        - Uses `feedparser` to parse Google News RSS feeds.
+        - Adds some buffer (fetch up to 3x requested items)
+          before filtering out old articles.
+        - Published time is ISO-8601 with UTC timezone if available.
     """
     rss_url = _google_news_rss_url(query, lang=lang, country=country)
     feed = feedparser.parse(rss_url)
     # Filter entries by publication time (lookback_hours) and collect title/source/link
-    filtered_entries = [
-        {
+    out = []
+    for entry in feed.entries:
+        print("for-loop")
+        cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=lookback_hours)
+        if dt.datetime(*entry.published_parsed[:6], tzinfo=dt.timezone.utc) < cutoff:
+            continue
+        # Extract publisher/source if available
+        source = ""
+        if hasattr(entry, "source") and getattr(entry.source, "title", ""):
+            source = entry.source.title
+        elif hasattr(entry, "tags") and entry.tags:
+            source = entry.tags[0].term
+        out.append({
             "title": entry.title,
-            "source": entry.source,
+            "source": source,
             "link": entry.link,
-        }
-        for entry in feed.entries
-        if dt.datetime.now() - dt.datetime(*entry.published_parsed[:6]) < dt.timedelta(hours=lookback_hours)
-    ][:limit]
-    print(filtered_entries)
-    return filtered_entries
+        })
+        if len(out) >= limit:
+            break
+    print(out)
+    return out

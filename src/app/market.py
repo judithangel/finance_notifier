@@ -20,21 +20,21 @@ def get_open_and_last(ticker: str) -> Tuple[float, float]:
     """
     # Loop over intraday intervals ("1m", "5m", "15m")
     for interval in ("1m", "5m", "15m"):
-
         # For each interval, attempt up to two retries
         for attempt in range(2):
+            print(f"attempt {attempt}")
             df = yf.Ticker(ticker).history(
                 period="1d", interval=interval, auto_adjust=False
             )
             if not df.empty:
                 open_today = float(df.iloc[0]["Open"])
                 last_price = float(df.iloc[-1]["Close"])
-                logger.debug(
+                logger.info(
                     "Intraday %s: interval=%s open=%.4f last=%.4f",
                     ticker, interval, open_today, last_price,
                 )
                 return open_today, last_price
-            logger.debug(
+            logger.info(
                 "Empty intraday data (%s, %s), retry %d",
                 ticker, interval, attempt + 1,
             )

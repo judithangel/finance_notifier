@@ -36,9 +36,7 @@ def main():
         test_cfg=cfg["test"],
         news_cfg=cfg["news"],
     )
-    # from src.app.company import auto_keywords
-    # name, req = auto_keywords(cfg["tickers"][0])
-    # print(req)
+
 
 if __name__ == "__main__":
     main()

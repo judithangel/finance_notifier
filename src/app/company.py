@@ -105,8 +105,8 @@ def _fetch_yf_info(symbol: str, retries: int = 2, delay: float = 0.4) -> Dict[st
                 return info
         except Exception as e:
             last_exc = e
+            logger.error(f"Failed to fetch Yahoo Finance info for {symbol}: {last_exc}")
             time.sleep(delay)
-    logger.error(f"Failed to fetch Yahoo Finance info for {symbol}: {last_exc}")
     return {}
 
 

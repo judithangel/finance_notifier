@@ -14,23 +14,6 @@ from .news import fetch_headlines, build_query, filter_titles
 
 logger = logging.getLogger("stock-alerts")
 
-
-def _ticker_to_query(ticker: str, override_name: str | None = None) -> str:
-    """
-    Return a human-friendly query term for a ticker.
-
-    Args:
-        ticker: Raw ticker symbol (e.g., "AAPL").
-        override_name: Optional override (e.g., "Apple").
-
-    Returns:
-        A display/query string; override_name if provided, else the ticker.
-    """
-    if override_name:
-        return override_name
-    return ticker
-
-
 def _ensure_https(u: str) -> str:
     """
     Ensure the given URL has a scheme. If missing, prefix with https://
@@ -38,8 +21,8 @@ def _ensure_https(u: str) -> str:
     This helps when feeds provide bare domains or schemeless URLs.
     """
     # Handle empty strings
-    if u == "":
-        raise ValueError("URL is empty")
+    if u == "" or not u:
+        logger.warning("Empty URL provided to _ensure_https")
     # If u starts with http:// or https://, return u unchanged
     if u.startswith(("http://", "https://")):
         return u
@@ -48,8 +31,6 @@ def _ensure_https(u: str) -> str:
         u = "https://" + u
     return u
 
-
-# TODO: Where to use this function?
 def _extract_original_url(link: str, *, resolve_redirects: bool = True, timeout: float = 3.0) -> str:
     """
     Try to extract the original article URL from Google News redirect links.
@@ -70,9 +51,10 @@ def _extract_original_url(link: str, *, resolve_redirects: bool = True, timeout:
     # Normalize link via _ensure_https
     link = _ensure_https(link)
     # If link is a news.google.com URL, attempt to extract ?url= parameter
-    if link.startswith("https://news.google.com"):
+    p = urlparse(link)
+    if "news.google.com" in p.netloc:
         try:
-            url = link.split("?url=")[1].split("&")[0]
+            url = p.query.split("url=")[1].split("&")[0]
         except Exception as e:
            logger.warning("Failed to extract original URL from Google News link: %s", e) 
     # Optionally resolve redirects via HEAD or GET
@@ -80,11 +62,11 @@ def _extract_original_url(link: str, *, resolve_redirects: bool = True, timeout:
         try:
             resp = requests.head(link, allow_redirects=True, timeout=timeout)
             if resp.status_code == 200:
-                url = resp.url
+                url = _ensure_https(resp.url)
             else:
                 resp = requests.get(link, allow_redirects=True, timeout=timeout)
                 if resp.status_code == 200:
-                    url = resp.url
+                    url = _ensure_https(resp.url)
         except Exception as e:
             logger.warning("Failed to resolve redirects for link %s: %s", link, e)
     # Return cleaned URL or fallback to original link
@@ -128,7 +110,15 @@ def _format_headlines(items: List[Dict[str, Any]]) -> str:
     # Build Markdown lines with titles, sources and cleaned links
     headlines = []
     for item in items:
-        headline = f"- {item['title']} -  {_domain(item['link'])}\n 🔗 {item['link']}"
+        title = item.get("title").strip()
+        link = item.get("link")
+        src = f" - {item.get("source")}" if item.get("source") else ""
+        if link:
+            orig = _extract_original_url(link)
+            dom = _domain(orig)
+            headline = f"• [{title}]({orig}) {src}\n   🔗 {orig if len(orig) <= 60 else 'https://' + dom}"
+        else:
+            headlines.append(f"• {title}{src}")
         headlines.append(headline)
     # Join lines with newline characters and return the result
     return "\n".join(headlines)
@@ -201,52 +191,68 @@ def run_once(
       - Writes logs according to logging setup
     """
     # Log job start and determine market-hours eligibility
-    logging.info("Starting monitoring cycle")
+    logger.info("Starting monitoring cycle")
     if not is_market_hours(market_hours_cfg):
         if test_cfg.get("bypass_market_hours", False):
-            logging.warning("Outside market hours, but bypass enabled via test config")
+            logger.warning("Outside market hours, but bypass enabled via test config")
         else:
-            logging.info("Outside market hours, skipping monitoring cycle")
+            logger.info("Outside market hours, skipping monitoring cycle")
             return
     # Load alert state from state_file
     state = load_state(state_file)
     # Iterate over tickers and fetch open/last prices
     for ticker in tickers:
-        price_open, price_last = get_open_and_last(ticker)
-        # Compute Δ% and apply test overrides if needed
-        delta_pct = (price_last - price_open) / price_open * 100 if price_open else 0
-        # TODO: Test overrides?
-        # Decide whether to send alerts and prepare notification body
-        if abs(delta_pct) >= threshold_pct:
-            name, req = auto_keywords(ticker)
-            symbol = req[1]
-            state[ticker] = {"last_price": price_last, "open_price": price_open, "alerted": True}
-            stock_info = f"📈  {symbol}: {delta_pct}% vs. Open\nAktuell: {price_last:.2f} | Open: {price_open:.2f}\n"
-            # Optionally fetch and format news headlines
-            if news_cfg["enabled"]:
-                items = fetch_headlines(
-                    query=build_query(name=ticker, ticker=ticker),
-                    limit=news_cfg["limit"],
-                    lookback_hours=news_cfg["lookback_hours"],
-                    lang=news_cfg["lang"],
-                    country=news_cfg["country"],
+        try:
+            price_open, price_last = get_open_and_last(ticker)
+            if price_open < 1e-15:
+                raise ValueError("Open price is zero, unable to compute Δ%")
+            # Compute Δ% and apply test overrides if needed
+            delta_pct = (price_last - price_open) / price_open * 100
+            # Test overrides
+            if test_cfg.get("enabled") and test_cfg.get("force_delta_pct") is not None:
+                    forced = float(test_cfg["force_delta_pct"])
+                    logger.info("Test mode: forcing Δ%% (%.2f%%) for %s (was %.2f%%).", forced, ticker, delta_pct)
+                    delta_pct = forced
+                    price_last = price_open * (1.0 + delta_pct / 100.0)
+            # Decide whether to send alerts and prepare notification body
+            if abs(delta_pct) >= threshold_pct:
+                name, req = auto_keywords(ticker)
+                symbol = req[1]
+                finance_symbol = "📈" if delta_pct > 0 else "📉"
+                state[ticker] = {"last_price": price_last, "open_price": price_open, "alerted": True}
+                stock_info = f"{finance_symbol}  {symbol}: {delta_pct}% vs. Open\nAktuell: {price_last:.2f} | Open: {price_open:.2f}\n"
+                # Optionally fetch and format news headlines
+                print(news_cfg["enabled"])
+                if news_cfg["enabled"]:
+                    logger.info("Fetching news for %s", ticker)
+                    items = fetch_headlines(
+                        query=build_query(name=ticker, ticker=ticker),
+                        limit=news_cfg["limit"],
+                        lookback_hours=news_cfg["lookback_hours"],
+                        lang=news_cfg["lang"],
+                        country=news_cfg["country"],
+                    )
+                    headlines = _format_headlines(
+                        filter_titles(items, required_keywords=req)
+                    )
+                    # Join stock_info and headlines
+                    message = "\n".join([stock_info, headlines])
+                else:
+                    message = stock_info
+                # Send notification via notify_ntfy and persist state via save_state
+                notify_ntfy(
+                    server=ntfy_server,
+                    topic=ntfy_topic,
+                    title=f"Stock Alert: {symbol}",
+                    markdown=True,
+                    message=message
                 )
-                headlines = _format_headlines(
-                    filter_titles(items, required_keywords=req)
-                )
-                # Join stock_info and headlines
-                message = "\n".join([stock_info, headlines])
             else:
-                message = stock_info
-            # Send notification via notify_ntfy and persist state via save_state
-            notify_ntfy(
-                server=ntfy_server,
-                topic=ntfy_topic,
-                title=f"Stock Alert: {symbol}",
-                message=message
-            )
-        else:
-            state[ticker] = {"last_price": price_last, "open_price": price_open, "alerted": False}
+                state[ticker] = {"last_price": price_last, "open_price": price_open, "alerted": False}
         
-        save_state(state_file, state)
-    pass
+            save_state(state_file, state)
+
+        except Exception as e:
+            # Catch-all to ensure a single bad ticker doesn't break the entire run
+            logger.error("Error while processing %s: %s", ticker, e)
+            continue
