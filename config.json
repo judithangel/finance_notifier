@@ -7,8 +7,7 @@
     "file_backup_count": 3
   },
   "ntfy": {
-    "server": "https://ntfy.sh",
-    "topic": "JNaD1d7FdIZPhN8b"
+    "server": "https://ntfy.sh"
   },
   "tickers": [
     "AAPL",
