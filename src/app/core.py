@@ -112,7 +112,7 @@ def _format_headlines(items: List[Dict[str, Any]]) -> str:
     for item in items:
         title = item.get("title").strip()
         link = item.get("link")
-        src = f" - {item.get("source")}" if item.get("source") else ""
+        src = f" - {item.get('source')}" if item.get('source') else ""
         if link:
             orig = _extract_original_url(link)
             dom = _domain(orig)
