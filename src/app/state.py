@@ -33,5 +33,5 @@ def save_state(path: Path, state: Dict[str, str]) -> None:
     Save the current alert state to disk.
     """
     # Den Zustand als JSON (UTF-8) in die Datei schreiben
-    path.write_text(json.dumps(state), encoding="utf-8")
+    path.write_text(json.dumps(state), indent=2, encoding="utf-8")
     logger.debug("Saved state: %s", state)
