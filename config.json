@@ -12,9 +12,10 @@
   "tickers": [
     "AAPL",
     "O",
-    "QDVX.DE"
+    "QDVX.DE",
+    "TUI1.DE"
   ],
-  "threshold_pct": 1.0,
+  "threshold_pct": 0.8,
   "state_file": "alert_state.json",
   "market_hours": {
     "enabled": true,
