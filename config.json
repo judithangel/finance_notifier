@@ -14,7 +14,7 @@
     "O",
     "QDVX.DE"
   ],
-  "threshold_pct": 1.0,
+  "threshold_pct": 0.1,
   "state_file": "alert_state.json",
   "market_hours": {
     "enabled": true,
