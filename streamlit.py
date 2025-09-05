@@ -1,9 +1,10 @@
 import streamlit as st
 from pathlib import Path
-from src.app.config import load_config, deep_merge
 import json
 import os, subprocess
 from dotenv import load_dotenv
+import joblib
+from src.app.ml_functions import load_hist_prices, engineer_features, train_model, predict_move, engineer_features_pred
 
 CONFIG_PATH = Path("config.json")
 
@@ -65,38 +66,77 @@ st.set_page_config(
     layout="wide"
 )
 st.title("Finance Notifier")
-st.write("Please enter your configuration settings:")
+st.write(
+    "This app allows you to configure stock tickers and train a machine learning model to predict stock movements.")
 
 # Load config file:
 config_data = load_config()
 
-# Set threshold for notification:
-config_data["threshold_pct"] = st.number_input("Threshold percentage", min_value=0.0, value=3.0, step=0.1)
-# Set tickers:
-tickers = st.multiselect("Select tickers", options=["AAPL", "O", "QDVX.DE", "TUI1.DE"], default=["AAPL", "O"])
-custom_ticker = st.text_area("Enter custom ticker (separated by \",\")", value="")
-if custom_ticker:
-    tickers.extend(custom_ticker.split(","))
-st.write(f"Selected tickers: {tickers}")
-config_data["tickers"] = tickers
-# Set ntfy server:
-config_data["ntfy"]["server"] = st.text_input("ntfy server", value="https://ntfy.sh")
-# Set logging level:
-config_data["log"]["level"] = st.selectbox(
-    "Log-Level",
-    ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-    index=["DEBUG","INFO","WARNING","ERROR","CRITICAL"].index(config_data["log"]["level"])
-)
-# Market hours:
-start_hour = st.number_input("Market start hour", min_value=0, max_value=22, value=8)
-end_hour = st.number_input("Market end hour", min_value=1, max_value=23, value=22)
-if end_hour <= start_hour:
-    st.error("End hour must be greater than start hour")
-# GitHub token:
-github_token = st.text_input("GitHub token", type="password")
+# Tabs
+tab1, tab2 = st.tabs(["Configuration", "Model Training"])
+with tab1:
+    st.header("Configuration Settings")
+    # Set threshold for notification:
+    threshold = st.number_input("Threshold percentage", min_value=0.0, value=3.0, step=0.1)
+    # Set tickers:
+    tickers = st.multiselect("Select tickers", options=["AAPL", "O", "QDVX.DE", "TUI1.DE"], default=["AAPL", "O"])
+    custom_ticker = st.text_area("Enter custom ticker (separated by \",\")", value="")
+    if custom_ticker:
+        tickers.extend(custom_ticker.split(","))
+    st.write(f"Selected tickers: {tickers}")
+    # Set ntfy server:
+    ntfy_server = st.text_input("ntfy server", value="https://ntfy.sh")
+    # Set logging level:
+    log_level = st.selectbox(
+        "Log-Level",
+        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        index=["DEBUG","INFO","WARNING","ERROR","CRITICAL"].index(config_data["log"]["level"])
+    )
+    # Market hours:
+    start_hour = st.number_input("Market start hour", min_value=0, max_value=22, value=8)
+    end_hour = st.number_input("Market end hour", min_value=1, max_value=23, value=22)
+    if end_hour <= start_hour:
+        st.error("End hour must be greater than start hour")
+    # GitHub token:
+    github_token = st.text_input("GitHub token", type="password")
 
-# Commit and push to github
-if st.button("Save configuration and push to GitHub"):
-    save_config(config_data)
-    if commit_and_push(github_token):
-        st.success("Configuration saved and pushed to GitHub")
+    # Commit and push to github
+    if st.button("Save configuration and push to GitHub"):
+        config_data["threshold_pct"] = threshold
+        config_data["tickers"] = tickers
+        config_data["ntfy"]["server"] = ntfy_server
+        config_data["log"]["level"] = log_level
+        config_data["market_hours"]["start"] = start_hour
+        config_data["market_hours"]["end"] = end_hour
+        save_config(config_data)
+        if commit_and_push(github_token):
+            st.success("Configuration saved and pushed to GitHub")
+
+with tab2:
+    st.header("Model Training")
+    st.write("Train a machine learning model to predict stock movements.")
+    ticker_for_training = st.selectbox("Select ticker for training", options=config_data["tickers"])
+    if st.button("Train Model"):
+        df_prices = load_hist_prices(ticker_for_training)
+        df_features = engineer_features(df_prices)
+        model = train_model(df_features)
+        st.success("Model trained successfully.")
+        # Save the trained model to a file
+        joblib.dump(model, f"trained_model_{ticker_for_training}.pkl")
+        if commit_and_push(github_token):
+            st.session_state['model_trained'] = True
+            st.success(f"Trained model saved as trained_model_{ticker_for_training}.pkl and pushed to GitHub")
+    if st.button("Make Prediction for tomorrow"):
+        try:
+            if st.session_state.get('model_trained') is not True:
+                model = joblib.load(f"trained_model_{ticker_for_training}.pkl")
+            df_prices = load_hist_prices(ticker_for_training, period="1mo")
+            df_features = engineer_features_pred(df_prices)
+            prediction = predict_move(model, df_features)
+            if prediction:
+                st.success(f"The model predicts that the stock price of {ticker_for_training} will go UP tomorrow.")
+            else:
+                st.warning(f"The model predicts that the stock price of {ticker_for_training} will go DOWN tomorrow.")
+        except Exception as e:
+            st.error(f"Error making prediction: No model has been trained yet. Please train the model first. Error details: {e}")
+    st.write("Used model: RandomForestClassifier")
