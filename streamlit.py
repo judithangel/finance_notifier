@@ -123,9 +123,12 @@ with tab2:
         st.success("Model trained successfully.")
         # Save the trained model to a file
         joblib.dump(model, f"trained_model_{ticker_for_training}.pkl")
-        if commit_and_push(github_token):
-            st.session_state['model_trained'] = True
-            st.success(f"Trained model saved as trained_model_{ticker_for_training}.pkl and pushed to GitHub")
+        push_model = st.checkbox("Push trained model to GitHub")
+        if push_model:
+            github_token = st.text_input("GitHub token for pushing model", type="password", key="model_token")
+            if commit_and_push(github_token):
+                st.session_state['model_trained'] = True
+                st.success(f"Trained model saved as trained_model_{ticker_for_training}.pkl and pushed to GitHub")
     if st.button("Make Prediction for tomorrow"):
         try:
             if st.session_state.get('model_trained') is not True:
