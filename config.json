@@ -15,7 +15,7 @@
     "QDVX.DE",
     "TUI1.DE"
   ],
-  "threshold_pct": 1.0,
+  "threshold_pct": 3.0,
   "state_file": "alert_state.json",
   "market_hours": {
     "enabled": true,
